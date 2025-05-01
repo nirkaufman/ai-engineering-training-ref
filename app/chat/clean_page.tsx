@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useRef, useEffect, FormEvent } from 'react'
-import {chatResponse, streamChat} from "@/server/chat-action";
 
 type Message = {
   id: string
@@ -12,91 +11,46 @@ type Message = {
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState('')
-
-  const [response, setResponse] = useState('');
-  const [streaming, setStreaming] = useState(false);
-
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Automatically scroll to the bottom when messages change
   // It listens to the message array, so it will re-run when it changes
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, response])
+  }, [messages])
 
-  const handleSubmit = async (e: FormEvent) => {
+  // TODO: Mock implantation - remove after implementing
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
 
-    if (!inputValue.trim()) return
+    if (!inputValue.trim()) return;
 
-    // Add user message to the chat
+    // Create a new user message
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: inputValue
+      content: inputValue.trim()
     }
 
+    // Add user message to chat
     setMessages(prev => [...prev, userMessage])
 
-    // Clear input
-    const userPrompt = inputValue
-    setInputValue('')
+    // Placeholder function - just logs the prompt for now
+    console.log('User prompt:', inputValue)
 
-    // Start streaming the response
-    await handleStreamClick(userPrompt)
-  }
-
-  const handleStreamClick = async (prompt = inputValue) => {
-    // Reset state
-    setResponse('');
-    setStreaming(true);
-
-    try {
-      const stream = await streamChat(prompt);
-      const reader = stream.getReader();
-
-      // Add AI message placeholder
-      const aiMessageId = Date.now().toString()
-
-      setMessages(prev => [...prev, {
-        id: aiMessageId,
+    // TODO: Remove after implementing
+    // Simulate AI response (in a real app, this would be an API call)
+    setTimeout(() => {
+      const aiMessage: Message = {
+        id: (Date.now() + 1).toString(),
         role: 'ai',
-        content: ''
-      }])
-
-      // Read the stream
-      while (true) {
-        const { done, value } = await reader.read();
-
-        if (done) {
-          break;
-        }
-
-        // Append each chunk to the response
-        setResponse(prev => prev + value);
-
-        // Update the AI message with the current response
-        setMessages(prev =>
-          prev.map(msg =>
-            msg.id === aiMessageId
-              ? { ...msg, content: prev.find(m => m.id === aiMessageId)?.content + value }
-              : msg
-          )
-        )
+        content: 'This is a placeholder AI response.'
       }
-    } catch (error) {
-      console.error('Streaming error:', error);
+      setMessages(prev => [...prev, aiMessage])
+    }, 500)
 
-      // Add an error message if streaming fails
-      setMessages(prev => [...prev, {
-        id: Date.now().toString(),
-        role: 'ai',
-        content: 'Sorry, there was an error processing your request.'
-      }])
-
-    } finally {
-      setStreaming(false);
-    }
+    // Clear input
+    setInputValue('')
   }
 
   return (
@@ -140,14 +94,12 @@ export default function ChatPage() {
               onChange={(e) => setInputValue(e.target.value)}
               placeholder="Type your message here..."
               className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2"
-              disabled={streaming}
             />
             <button
               type="submit"
-              className={`bg-black text-white border border-orange-400 px-4 py-2 rounded-lg ${!streaming ? 'hover:bg-orange-400' : 'opacity-50'} focus:outline-none cursor-pointer`}
-              disabled={streaming}
+              className="bg-black text-white border border-orange-400 px-4 py-2 rounded-lg hover:bg-orange-400 focus:outline-none cursor-pointer"
             >
-              {streaming ? 'Sending...' : 'Send'}
+              Send
             </button>
           </form>
         </div>

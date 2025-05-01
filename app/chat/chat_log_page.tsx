@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, FormEvent } from 'react'
-import {chatResponse, streamChat} from "@/server/chat-action";
+import {chatResponse} from "@/server/chat-action";
 
 type Message = {
   id: string
@@ -12,91 +12,20 @@ type Message = {
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState('')
-
-  const [response, setResponse] = useState('');
-  const [streaming, setStreaming] = useState(false);
-
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Automatically scroll to the bottom when messages change
   // It listens to the message array, so it will re-run when it changes
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, response])
+  }, [messages])
 
+  //  Simple log response
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
 
-    if (!inputValue.trim()) return
-
-    // Add user message to the chat
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: inputValue
-    }
-
-    setMessages(prev => [...prev, userMessage])
-
-    // Clear input
-    const userPrompt = inputValue
-    setInputValue('')
-
-    // Start streaming the response
-    await handleStreamClick(userPrompt)
-  }
-
-  const handleStreamClick = async (prompt = inputValue) => {
-    // Reset state
-    setResponse('');
-    setStreaming(true);
-
-    try {
-      const stream = await streamChat(prompt);
-      const reader = stream.getReader();
-
-      // Add AI message placeholder
-      const aiMessageId = Date.now().toString()
-
-      setMessages(prev => [...prev, {
-        id: aiMessageId,
-        role: 'ai',
-        content: ''
-      }])
-
-      // Read the stream
-      while (true) {
-        const { done, value } = await reader.read();
-
-        if (done) {
-          break;
-        }
-
-        // Append each chunk to the response
-        setResponse(prev => prev + value);
-
-        // Update the AI message with the current response
-        setMessages(prev =>
-          prev.map(msg =>
-            msg.id === aiMessageId
-              ? { ...msg, content: prev.find(m => m.id === aiMessageId)?.content + value }
-              : msg
-          )
-        )
-      }
-    } catch (error) {
-      console.error('Streaming error:', error);
-
-      // Add an error message if streaming fails
-      setMessages(prev => [...prev, {
-        id: Date.now().toString(),
-        role: 'ai',
-        content: 'Sorry, there was an error processing your request.'
-      }])
-
-    } finally {
-      setStreaming(false);
-    }
+    const response = await chatResponse();
+    console.log(response);
   }
 
   return (
@@ -140,14 +69,12 @@ export default function ChatPage() {
               onChange={(e) => setInputValue(e.target.value)}
               placeholder="Type your message here..."
               className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2"
-              disabled={streaming}
             />
             <button
               type="submit"
-              className={`bg-black text-white border border-orange-400 px-4 py-2 rounded-lg ${!streaming ? 'hover:bg-orange-400' : 'opacity-50'} focus:outline-none cursor-pointer`}
-              disabled={streaming}
+              className="bg-black text-white border border-orange-400 px-4 py-2 rounded-lg hover:bg-orange-400 focus:outline-none cursor-pointer"
             >
-              {streaming ? 'Sending...' : 'Send'}
+              Send
             </button>
           </form>
         </div>
