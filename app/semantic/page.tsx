@@ -79,13 +79,13 @@ export default function ChatPage() {
 
       // Start streaming search results
       const stream = await streamSemanticSearch(userQuery)
-      
+
       if (!stream) {
         throw new Error('No stream returned from search API')
       }
-      
+
       const reader = stream.getReader()
-      
+
       // Array to collect search results
       const searchResults: any[] = []
 
@@ -97,7 +97,7 @@ export default function ChatPage() {
 
         // Convert the chunk to text
         const chunk = new TextDecoder().decode(value)
-        
+
         // Handle SSE format (data: {...})
         const lines = chunk.split('\n\n')
         for (const line of lines) {
@@ -105,13 +105,13 @@ export default function ChatPage() {
             try {
               const jsonData = JSON.parse(line.substring(6))
               searchResults.push(jsonData)
-              
+
               // Update the message with search results
               setMessages(prev => {
                 return prev.map(msg =>
                   msg.id === resultsMessageId
-                    ? { 
-                        ...msg, 
+                    ? {
+                        ...msg,
                         content: `Found ${searchResults.length} relevant results from the document.`,
                         pageContent: jsonData.pageContent,
                         metadata: jsonData.metadata
@@ -125,7 +125,7 @@ export default function ChatPage() {
           }
         }
       }
-      
+
       // If no results were found
       if (searchResults.length === 0) {
         setMessages(prev => {
@@ -136,7 +136,7 @@ export default function ChatPage() {
           )
         })
       }
-      
+
       // Add individual search results as separate messages
       searchResults.forEach((result, index) => {
         setMessages(prev => [...prev, {
@@ -148,7 +148,7 @@ export default function ChatPage() {
           metadata: result.metadata
         }])
       })
-      
+
     } catch (error) {
       console.error('Streaming error:', error)
 
@@ -191,7 +191,8 @@ export default function ChatPage() {
                       <div className="whitespace-pre-wrap">{message.content}</div>
                       {message.metadata && (
                         <div className="mt-2 text-xs text-gray-500">
-                          Source: Page {message.metadata.loc?.pageNumber || 'unknown'}
+                          Source file: {message.metadata.source?.split('/').pop() || 'unknown'} in
+                          Page { message.metadata.loc?.pageNumber || 'unknown'}
                         </div>
                       )}
                     </div>
