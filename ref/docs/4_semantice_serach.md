@@ -1,173 +1,54 @@
-Below is a Next.js–based re-implementation of the LangChain retrievers tutorial (semantic search over a PDF) that streams matching document chunks back to the browser in real time.
+# Building a Semantic Search API with Vector Embeddings
 
-## 1. Dependencies and Setup
+This tutorial provides a comprehensive guide to implementing a semantic search API that processes PDF documents, creates vector embeddings, and enables advanced search capabilities using LangChain and OpenAI. The implementation follows a structured approach with proper error handling and performance considerations.
 
-Install the same packages used in the tutorial:
+## Table of Contents
 
-```bash
-  npm install @langchain/community pdf-parse @langchain/textsplitters
-```
+1. [Introduction to Semantic Search](#introduction-to-semantic-search)
+2. [Prerequisites](#prerequisites)
+3. [Architecture Overview](#architecture-overview)
+4. [Step 1: Setting Up Dependencies](#step-1-setting-up-dependencies)
+5. [Step 2: Implementing PDF Document Loading](#step-2-implementing-pdf-document-loading)
+6. [Step 3: Creating Text Splitters](#step-3-creating-text-splitters)
+7. [Step 4: Implementing Vector Store](#step-4-implementing-vector-store)
+8. [Step 5: Building the API Route Handler](#step-5-building-the-api-route-handler)
+9. [Step 6: Streaming Search Results](#step-6-streaming-search-results)
+10. [Advanced Optimizations](#advanced-optimizations)
+11. [Troubleshooting](#troubleshooting)
+12. [Next Steps](#next-steps)
 
-- We’ll use **PDFLoader** to load a PDF into LangChain Documents
-- We split pages into 1 000-character chunks via **RecursiveCharacterTextSplitter**
-- Embeddings come from **OpenAIEmbeddings** 
-- Store vectors in memory with **MemoryVectorStore**
-- Place your `*.pdf` file `public/` folder.
+## Introduction to Semantic Search
 
-## 2. Next.js API Route with Streaming
+Traditional search methods rely on keyword matching, which can miss conceptually related content. Semantic search, on the other hand, understands the intent and contextual meaning behind a search query, providing more relevant results even when exact keywords aren't present.
 
-- Create **`app/api/search/route.ts`**:
+Vector embeddings enable semantic search by converting text into numerical vectors that capture semantic meaning. Documents with similar meaning have vectors that are close together in high-dimensional space, allowing for similarity-based retrieval.
 
-```ts
-// pages/api/search.ts
-import type { NextApiRequest, NextApiResponse } from 'next';
-import { PDFLoader } from '@langchain/community/document_loaders/fs/pdf';
-import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
-import { OpenAIEmbeddings } from '@langchain/openai';
-import { MemoryVectorStore } from 'langchain/vectorstores/memory';
+## Prerequisites
 
-let vectorStore: MemoryVectorStore | null = null;
+Before starting this tutorial, ensure you have:
 
-async function initVectorStore() {
-  if (vectorStore) return vectorStore;
+- Next.js 14 or later
+- Node.js 18+
+- An OpenAI API key (for creating embeddings)
+- Basic understanding of TypeScript and asynchronous programming
+- The following packages installed:
+   - `@langchain/community`
+   - `@langchain/openai`
+   - `@langchain/textsplitters`
+   - `langchain/vectorstores`
+   - `pdf-parse`
 
-  // 1. Load PDF
-  const loader = new PDFLoader('public/sample.pdf');
-  const docs = await loader.load();
+## Architecture Overview
 
-  // 2. Split into chunks
-  const splitter = new RecursiveCharacterTextSplitter({
-    chunkSize: 1000,
-    chunkOverlap: 200,
-  });
-  const splits = await splitter.splitDocuments(docs);
+Our implementation follows this pattern:
 
-  // 3. Embed & index
-  const embeddings = new OpenAIEmbeddings({ model: 'text-embedding-3-large' });
-  const store = new MemoryVectorStore(embeddings);
-  await store.addDocuments(splits);
+1. **Data Loading**: Load PDF documents from a specified directory
+2. **Text Processing**: Split documents into manageable chunks for embedding
+3. **Embedding Creation**: Generate vector embeddings for each chunk
+4. **Vector Storage**: Store embeddings in memory for quick retrieval
+5. **API Endpoint**: Create an API route that accepts queries and returns matches
+6. **Result Streaming**: Stream search results back to the client for responsive UX
 
-  vectorStore = store;
-  return store;
-}
+## Step 1: Setting Up Dependencies
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
-    return res.status(405).end('Method Not Allowed');
-  }
-
-  const { query } = req.body as { query?: string };
-  if (!query) return res.status(400).json({ error: 'Missing query.' });
-
-  const store = await initVectorStore();
-  const retriever = store.asRetriever({ searchType: 'similarity', searchKwargs: { k: 5 } });
-
-  // Set up Server-Sent Events headers
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    Connection: 'keep-alive',
-  });
-
-  // Stream each matching Document as a JSON chunk
-  const docs = await retriever.getRelevantDocuments(query);
-  for (const doc of docs) {
-    res.write(`data: ${JSON.stringify({
-      content: doc.pageContent,
-      metadata: doc.metadata,
-    })}\n\n`);
-  }
-
-  // Signal end of stream
-  res.write('event: end\ndata: null\n\n');
-  res.end();
-}
-```
-
-## 3. Client-Side Streaming Component
-
-Create **`pages/index.tsx`**:
-
-```tsx
-// pages/index.tsx
-import { useState, useRef } from 'react';
-
-type Doc = { content: string; metadata: any };
-
-export default function Home() {
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<Doc[]>([]);
-  const controllerRef = useRef<AbortController>();
-
-  const handleSearch = async () => {
-    setResults([]);
-    controllerRef.current?.abort();
-    const controller = new AbortController();
-    controllerRef.current = controller;
-
-    const res = await fetch('/api/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query }),
-      signal: controller.signal,
-    });
-
-    const reader = res.body!.getReader();
-    const decoder = new TextDecoder();
-    let done = false;
-
-    while (!done) {
-      const { value, done: doneReading } = await reader.read();
-      done = doneReading;
-      if (value) {
-        const chunk = decoder.decode(value);
-        // Split by SSE frame
-        const lines = chunk.split('\n\n').filter(Boolean);
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const payload = line.replace(/^data: /, '');
-            if (payload === 'null') return;
-            const doc: Doc = JSON.parse(payload);
-            setResults((r) => [...r, doc]);
-          }
-        }
-      }
-    }
-  };
-
-  return (
-    <main style={{ padding: 20 }}>
-      <h1>Semantic Search</h1>
-      <input
-        style={{ width: '80%', padding: 8 }}
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Ask about Nike..."
-      />
-      <button onClick={handleSearch} style={{ marginLeft: 8, padding: '8px 16px' }}>
-        Search
-      </button>
-      <section style={{ marginTop: 20 }}>
-        {results.map((doc, i) => (
-          <div key={i} style={{ marginBottom: 16, borderBottom: '1px solid #ccc', paddingBottom: 8 }}>
-            <p>{doc.content}</p>
-            <small>{JSON.stringify(doc.metadata)}</small>
-          </div>
-        ))}
-      </section>
-    </main>
-  );
-}
-```
-
-## 4. How It Works
-
-1. **Initialization**  
-   On first request, we load and split the PDF, generate embeddings, and build an in-memory vector store  ([Build a semantic search engine | ️ Langchain](https://js.langchain.com/docs/tutorials/retrievers)).
-2. **Retrieval**  
-   We call `asRetriever` on the store to get a Retriever Runnable, and invoke `getRelevantDocuments(query)`  ([Build a semantic search engine | ️ Langchain](https://js.langchain.com/docs/tutorials/retrievers)).
-3. **Streaming**  
-   The API route writes each document chunk as a Server-Sent Event (`data: …`), and the client reads the stream via `ReadableStream.getReader()`, appending results as they arrive.
-
-This approach mirrors the LangChain tutorial’s feature set—only now wrapped in a Next.js app with live streaming of search hits to the browser.
+Let's start by importing all necessary dependencies and setting up configuration constants:
