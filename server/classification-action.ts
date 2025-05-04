@@ -30,7 +30,8 @@ const classificationSchema = z.object({
   language: z.string().describe("The language the text is written in"),
 });
 
-// Name is optional but gives the models more clues as to what your schema represents
+
+
 const llmWihStructuredOutput = llm.withStructuredOutput(classificationSchema, {
   name: "extractor",
 });
@@ -45,6 +46,9 @@ const model = new ChatOpenAI({ model: "gpt-4" });
  * @returns A ReadableStream containing the classification results
  */
 export async function streamClassification(text: string) {
+  const prompt = await taggingPrompt.invoke({ input: text});
+
+
   const messages = [
     new SystemMessage(
       "You are a content classifier. Analyze the text and classify it into one of these categories: " +
@@ -52,10 +56,10 @@ export async function streamClassification(text: string) {
       "First, provide the classification category in a single word. " +
       "Then, on a new line, provide a brief explanation for why you classified it this way."
     ),
-    new HumanMessage(text),
+    new HumanMessage(prompt.toString()),
   ];
 
-  const stream = await model.stream(messages);
+  const stream = await llmWihStructuredOutput.stream(messages);
 
   // Return a ReadableStream for server-sent events
   return new ReadableStream({
@@ -63,7 +67,7 @@ export async function streamClassification(text: string) {
       try {
         for await (const chunk of stream) {
           // Send each chunk to the client
-          controller.enqueue(chunk.content);
+          controller.enqueue(JSON.stringify(chunk, null, 2));
         }
         controller.close();
       } catch (error) {
