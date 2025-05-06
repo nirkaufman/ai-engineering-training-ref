@@ -65,7 +65,7 @@ export default function ExtractionPage() {
       const stream = await streamExtraction(userText)
 
       if (!stream) {
-        throw new Error('No stream returned from classification API')
+        throw new Error('No stream returned from extraction API')
       }
 
       const reader = stream.getReader()
@@ -113,7 +113,7 @@ export default function ExtractionPage() {
       setMessages(prev => [...prev, {
         id: generateId(),
         role: 'ai',
-        content: 'Sorry, there was an error processing your classification request.',
+        content: 'Sorry, there was an error processing your extraction request.',
         isClassification: true
       }])
     } finally {

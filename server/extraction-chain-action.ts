@@ -13,10 +13,10 @@ const llm = new ChatOpenAI({
 // describe what information we want to extract from the text.
 const personSchema = z.object({
   name: z.optional(z.string()).describe("The name of the person"),
-  hair_color: z
+  hairColor: z
       .optional(z.string())
       .describe("The color of the person's hair if known"),
-  height_in_meters: z
+  heightInMeters: z
       .optional(z.string())
       .describe("Height measured in meters"),
 });
