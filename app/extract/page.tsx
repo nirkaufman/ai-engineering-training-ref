@@ -1,6 +1,5 @@
 'use client'
 
-
 import {FormEvent, useEffect, useRef, useState} from 'react'
 import {streamExtraction} from '@/server/extraction-chain-action'
 
