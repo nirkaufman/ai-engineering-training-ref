@@ -99,7 +99,7 @@ export async function chatWithMemory(prompt: string) {
   return new ReadableStream({
     async start(controller) {
       for await (const chunk of stream) {
-        console.log(chunk);
+
         controller.enqueue(chunk.model.messages.content);
 
         // for messages placeholder
