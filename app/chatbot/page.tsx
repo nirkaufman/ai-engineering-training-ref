@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, FormEvent } from 'react'
 import {chatWithMemory, statelessChat} from "@/server/stateful-chatbot-action";
 import {chatWithAgent} from "@/server/first-agent-action";
+import {chatWithRag} from "@/server/minimal-rag-action";
 
 type Message = {
   id: string
@@ -61,7 +62,9 @@ export default function ChatPage() {
       // Start streaming
       // const stream = await statelessChat(userPrompt)
       // const stream = await chatWithMemory(userPrompt)
-      const stream = await chatWithAgent(userPrompt)
+      // const stream = await chatWithAgent(userPrompt)
+      const stream = await chatWithRag(userPrompt)
+
       const reader = stream.getReader()
 
       // Process the stream
